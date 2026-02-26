@@ -1,4 +1,4 @@
-<!-- Version 11-02-2026 -->
+<!-- Version 26-02-2026 -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -520,7 +520,28 @@ subtitleFileInput.addEventListener('change',e=>{
   alert("Please select a .vtt subtitle file.");
  }
 });
+/* === Server subtitle loader */
+if (serverBtn) {
+  serverBtn.addEventListener('click', () => {
+    const url = prompt("Enter full URL to .vtt subtitle file:");
+    if (!url) return;
+    if (!/\\.vtt(\\?.*)?$/i.test(url)) { alert("URL must point to a .vtt file."); return; }
+    [...videoPlayer.querySelectorAll('track')].forEach(t => t.remove());
+    const track = document.createElement('track');
+    track.kind = 'subtitles';
+    track.label = 'Server Subtitles';
+    track.srclang = 'en';
+    track.default = true;
+    track.src = url;
+    videoPlayer.appendChild(track);
+    try {
+      const tt = videoPlayer.textTracks[0];
+      if (tt) tt.mode = 'showing';
+    } catch {}
+  });
+}
 </script>
 </body>
 </html>
+
 
