@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="UTF-8">
+	<title>Browser Media Player</title>
+	<style>
+/* General layout */
+body {
+ background-color: #1c1c1c;
+ font-family: Arial, sans-serif;
+ color: #fff;
+ margin: 0;
+ padding-top: 60px;
+}
+header {
+ position: fixed;
+ top: 0;
+ width: 100%;
+ background: #111;
+ color: #fff;
+ text-align: center;
+ font-weight: bold;
+ font-size: 20px;
+ padding: 15px 0;
+ z-index: 1000;
+ box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+}
+#info-icon {
+ position: fixed;
+ top: 15px;
+ right: 15px;
+ width: 28px;
+ height: 28px;
+ background-color: #444;
+ color: #fff;
+ border-radius: 50%;
+ text-align: center;
+ line-height: 28px;
+ font-weight: bold;
+ cursor: pointer;
+ z-index: 1001;
+ user-select: none;
+ font-size: 16px;
+}
+#info-icon:hover { background-color: #666; }
+#explainer {
+ display: none;
+ max-width: 300px;
+ margin: 10px auto 20px auto;
+ padding: 15px;
+ color: #ccc;
+ font-size: 16px;
+ background: #222;
+ border-radius: 5px;
+ line-height: 1.5;
+ position: fixed;
+ top: 50px;
+ right: 15px;
+ z-index: 1000;
+}
+#container {
+ display: flex;
+ flex-direction: row;
+ margin: 0 auto;
+ width: 90%;
+ max-width: 1600px;
+ gap: 40px;
+ padding: 20px;
+ justify-content: center;
+}
+#media-container { flex: 2; min-width: 0; }
+#sidebar { flex: 1; display: flex; flex-direction: column; height: auto; }
+#file-input-container {
+ margin-bottom: 10px;
+ display:flex;
+ justify-content:space-between;
+ align-items:center;
+}
+/* Custom Add Files button */
+#add-files-label {
+ padding: 6px 10px;
+ background: #333;
+ border: 1px solid #555;
+ border-radius: 5px;
+ cursor: pointer;
+ font-size: 14px;
+ color: #fff;
+ user-select: none;
+}
+#add-files-label:hover {
+ background: #555;
+}
+/* Hide real input */
+#add-files-label input[type="file"] {
+ display: none;
+}
+#clear-playlist-btn {
+ padding: 6px 10px;
+ font-size: 14px;
+ background-color: #333;
+ border: 1px solid #555;
+ border-radius: 5px;
+ color: #fff;
+ cursor: pointer;
+}
+#clear-playlist-btn:hover { background-color: #555; }
+video, audio, iframe, img, pre, div.viewer {
+ width: 100%;
+ max-width: 100%;
+ height: auto;
+ aspect-ratio: 16 / 9;
+ background-color: #000;
+ border-radius: 5px;
+ display: block;
+ margin-bottom: 10px;
+}
+audio, iframe, img, pre, div.viewer { display: none; }
+iframe { border: none; }
+pre, #csv-viewer, iframe#html-viewer, iframe#pdf-viewer {
+ max-height: 80vh;
+ overflow: auto;
+}
+button.fullscreen-btn {
+ display: none;
+ margin-top: 10px;
+ padding: 8px 12px;
+ font-size: 14px;
+ cursor: pointer;
+ background-color: #333;
+ border: 1px solid #555;
+ border-radius: 5px;
+ color: #fff;
+}
+button.fullscreen-btn:hover { background-color: #555; }
+/* Playlist and remove button */
+#playlist {
+ flex: 1;
+ overflow-y: auto;
+ background-color: #282828;
+ border-radius: 5px;
+ margin: 0;
+ padding: 0;
+ list-style: none;
+ max-height: 45vh;
+}
+#playlist li {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ padding: 10px;
+ border-bottom: 1px solid #333;
+}
+#playlist li:last-child { border-bottom: none; }
+#playlist li a {
+ color: #fff;
+ text-decoration: none;
+ cursor: pointer;
+ display: block;
+ flex: 1 1 auto;
+ word-break: break-word;
+}
+#playlist li a:hover { color: #ccc; }
+#playlist li.active a { color: #00ff00; font-weight: bold; }
+#playlist li.unsupported a { color: #ff5555; cursor: default; }
+.remove-btn {
+ flex: 0 0 auto;
+ color: #ff5555;
+ font-weight: bold;
+ cursor: pointer;
+ margin-left: 10px;
+ user-select: none;
+}
+.remove-btn:hover { color: #ff7777; }
+#controls {
+ flex: 0 0 auto;
+ margin-top: 10px;
+ padding: 10px;
+ background: #222;
+ border-radius: 5px;
+ width: 100%;
+ box-sizing: border-box;
+}
+#controls label { display: block; margin: 8px 0; }
+#controls input[type="number"] { width: 60px; margin-left: 5px; }
+</style>
+</head>
+<body>
+<header>Browser Media Player</header>
+<div id="info-icon">i</div>
+<div id="explainer">
+This player uses HTML5 features to load video and audio, and the browser’s built‑in rendering engine to load images, documents, and other supported files.
+</div>
+
+<div id="container">
+<div id="media-container">
+<video id="video-player" controls>This browser does not support HTML5 features. Please use a modern browser.</video>
+<div id="subtitle-controls" style="display:none; margin-top:10px;">
+<button id="load-subtitles-btn" class="fullscreen-btn" style="display:inline-block;">
+ Load Local Subtitles (.vtt)
+</button>
+<input type="file" id="subtitle-file" accept=".vtt" style="display:none;">
+<button id="server-subtitles-btn" class="fullscreen-btn" style="display:inline-block;">
+ Load Server Subtitles (.vtt)
+</button>
+</div>
+<audio id="audio-player" controls></audio>
+<img id="image-viewer" alt="Image Viewer">
+<iframe id="pdf-viewer"></iframe>
+<pre id="text-viewer"></pre>
+<div id="csv-viewer"><table id="csv-table"></table></div>
+<iframe id="html-viewer" sandbox></iframe>
+<button id="fullscreen-btn" class="fullscreen-btn">Full Screen</button>
+</div>
+
+<div id="sidebar">
+<h3 style="margin:5px 0 10px 0; font-size:18px; font-weight:bold;">Playlist</h3>
+
+<div id="file-input-container">
+<label id="add-files-label">
+ Add Files
+ <input type="file" id="media-files"
+ accept="video/*,audio/*,image/*,application/pdf,text/*,application/json,application/xml,text/csv,text/html,image/svg+xml,image/vnd.microsoft.icon"
+ multiple>
+</label>
+<button id="clear-playlist-btn">Clear Playlist</button>
+</div>
+
+<ul id="playlist"></ul>
+
+<div id="controls">
+<label><input type="checkbox" id="autoplay-toggle"> Autoplay next (video/audio)</label>
+<label>
+ <input type="checkbox" id="universal-timer-toggle"> Autoplay next (other files)
+ <input type="number" id="universal-timer-seconds" value="5" min="1"> sec
+</label>
+</div>
+</div>
+</div>
+
+<script>
+/* === Info toggle === */
+const infoIcon=document.getElementById('info-icon');
+const explainer=document.getElementById('explainer');
+infoIcon.addEventListener('click',()=>{ explainer.style.display = explainer.style.display==='block' ? 'none':'block'; });
+document.addEventListener('click',e=>{ if(!infoIcon.contains(e.target) && !explainer.contains(e.target)) explainer.style.display='none'; });
+
+/* === Main elements === */
+const mediaFilesInput=document.getElementById('media-files');
+const videoPlayer=document.getElementById('video-player');
+const audioPlayer=document.getElementById('audio-player');
+const imageViewer=document.getElementById('image-viewer');
+const pdfViewer=document.getElementById('pdf-viewer');
+const textViewer=document.getElementById('text-viewer');
+const csvViewer=document.getElementById('csv-viewer');
+const csvTable=document.getElementById('csv-table');
+const htmlViewer=document.getElementById('html-viewer');
+const fullscreenBtn=document.getElementById('fullscreen-btn');
+const subtitleControls=document.getElementById('subtitle-controls');
+const loadSubtitlesBtn=document.getElementById('load-subtitles-btn');
+const subtitleFileInput=document.getElementById('subtitle-file');
+const serverBtn=document.getElementById('server-subtitles-btn');
+const playlist=document.getElementById('playlist');
+const clearPlaylistBtn=document.getElementById('clear-playlist-btn');
+const autoplayToggle=document.getElementById('autoplay-toggle');
+const universalTimerToggle=document.getElementById('universal-timer-toggle');
+const universalTimerSeconds=document.getElementById('universal-timer-seconds');
+
+let currentActive=null;
+let playlistItems=[];
+let timerId=null;
+
+/* === Reset Player === */
+function resetPlayerUIToDefault() {
+ clearTimer();
+ try { videoPlayer.pause(); } catch {}
+ try { audioPlayer.pause(); } catch {}
+ videoPlayer.removeAttribute('src');
+ audioPlayer.removeAttribute('src');
+ imageViewer.removeAttribute('src');
+ pdfViewer.removeAttribute('src');
+ htmlViewer.removeAttribute('src');
+ textViewer.textContent = "";
+ csvTable.innerHTML = "";
+ [...videoPlayer.querySelectorAll('track')].forEach(t=>t.remove());
+ if(videoPlayer.textTracks && videoPlayer.textTracks.length){
+  for(const tt of videoPlayer.textTracks) tt.mode='disabled';
+ }
+ try { videoPlayer.load(); } catch {}
+ try { audioPlayer.load(); } catch {}
+ videoPlayer.style.display='block';
+ audioPlayer.style.display='none';
+ imageViewer.style.display='none';
+ pdfViewer.style.display='none';
+ textViewer.style.display='none';
+ csvViewer.style.display='none';
+ htmlViewer.style.display='none';
+ subtitleControls.style.display='none';
+ fullscreenBtn.style.display='none';
+}
+
+/* === Clear Playlist === */
+clearPlaylistBtn.addEventListener("click", () => {
+ playlist.innerHTML = "";
+ playlistItems = [];
+ currentActive = null;
+ resetPlayerUIToDefault();
+ mediaFilesInput.value = "";
+});
+
+/* === Media Display Helpers === */
+function hideAllMedia(){
+ [videoPlayer,audioPlayer,imageViewer,pdfViewer,textViewer,csvViewer,htmlViewer]
+ .forEach(el=>el.style.display='none');
+ fullscreenBtn.style.display='none';
+ subtitleControls.style.display='none';
+}
+
+function setActive(li){
+ if(currentActive) currentActive.classList.remove('active');
+ li.classList.add('active');
+ currentActive=li;
+}
+
+function clearTimer(){ if(timerId){ clearTimeout(timerId); timerId=null; } }
+
+function resetMediaSize(){
+ imageViewer.style.width='854px';
+ imageViewer.style.height='480px';
+}
+
+function adjustVideoAspect(){}
+
+function adjustImageAspect(){
+ const ratio=imageViewer.naturalWidth/imageViewer.naturalHeight;
+ if(ratio){
+  if(ratio>(854/480)){
+   imageViewer.style.width='854px';
+   imageViewer.style.height=(854/ratio)+'px';
+  } else {
+   imageViewer.style.height='480px';
+   imageViewer.style.width=(480*ratio)+'px';
+  }
+ }
+}
+
+/* === File display === */
+function displayFile(file,url){
+ hideAllMedia();
+ resetMediaSize();
+ setActive(this.parentElement);
+ clearTimer();
+ videoPlayer.pause(); videoPlayer.currentTime=0;
+ audioPlayer.pause(); audioPlayer.currentTime=0;
+
+ if(file.type.startsWith('video/')){
+  videoPlayer.src=url;
+  videoPlayer.style.display='block';
+  subtitleControls.style.display='block';
+  videoPlayer.onloadedmetadata=adjustVideoAspect;
+  videoPlayer.play();
+ }
+ else if(file.type.startsWith('audio/')){
+  audioPlayer.src=url;
+  audioPlayer.style.display='block';
+  audioPlayer.play();
+ }
+ else if(file.type.startsWith('image/')){
+  imageViewer.src=url;
+  imageViewer.style.display='block';
+  imageViewer.onload=adjustImageAspect;
+  fullscreenBtn.style.display='inline-block';
+  fullscreenBtn.onclick=()=>imageViewer.requestFullscreen();
+ }
+ else if(file.type==='application/pdf'){
+  pdfViewer.src=url;
+  pdfViewer.style.display='block';
+  fullscreenBtn.style.display='inline-block';
+  fullscreenBtn.onclick=()=>pdfViewer.requestFullscreen();
+ }
+ else if(file.type==='text/html'){
+  htmlViewer.src=url;
+  htmlViewer.style.display='block';
+  fullscreenBtn.style.display='inline-block';
+  fullscreenBtn.onclick=()=>htmlViewer.requestFullscreen();
+ }
+ else if(
+  file.type.startsWith('text/') ||
+  file.type==='application/json' ||
+  file.type==='application/xml'
+ ){
+  const reader=new FileReader();
+  reader.onload=()=>{
+   textViewer.textContent=reader.result;
+   textViewer.style.display='block';
+   fullscreenBtn.style.display='inline-block';
+   fullscreenBtn.onclick=()=>textViewer.requestFullscreen();
+  };
+  reader.readAsText(file);
+ }
+ else if(file.type==='text/csv'){
+  const reader=new FileReader();
+  reader.onload=()=>{
+   csvTable.innerHTML="";
+   reader.result.split(/\r?\n/).filter(r=>r.trim()!=="").forEach(row=>{
+    const tr=document.createElement("tr");
+    row.split(",").forEach(cell=>{
+     const td=document.createElement("td");
+     td.textContent=cell.trim();
+     tr.appendChild(td);
+    });
+    csvTable.appendChild(tr);
+   });
+   csvViewer.style.display='block';
+   fullscreenBtn.style.display='inline-block';
+   fullscreenBtn.onclick=()=>csvViewer.requestFullscreen();
+  };
+  reader.readAsText(file);
+ }
+
+ if(!file.type.startsWith('video/') && !file.type.startsWith('audio/') && universalTimerToggle.checked){
+  const seconds=parseInt(universalTimerSeconds.value)||5;
+  timerId=setTimeout(()=>playNext(), seconds*1000);
+ }
+}
+
+/* Allow playlist items to be user‑reorderable */
+let draggedItem = null;
+
+playlist.addEventListener("dragstart", e => {
+ draggedItem = e.target;
+ e.dataTransfer.effectAllowed = "move";
+});
+
+playlist.addEventListener("dragover", e => {
+ e.preventDefault();
+ const li = e.target.closest("li");
+ if(!li || li === draggedItem) return;
+ playlist.insertBefore(draggedItem, li);
+});
+
+playlist.addEventListener("drop", e => {
+ e.preventDefault();
+ playlistItems = [...playlist.querySelectorAll("li")];
+});
+
+/* === Playlist building === */
+mediaFilesInput.addEventListener('change',function(){
+ const files=this.files;
+ if(files){
+  for(let i=0;i<files.length;i++){
+   const file=files[i];
+   const url=URL.createObjectURL(file);
+
+   const listItem=document.createElement('li');
+   listItem.dataset.url = url;
+   listItem.dataset.type = file.type;
+
+   /* Playlist reorder – drag and drop */
+   listItem.draggable = true;
+
+   const link=document.createElement('a');
+   link.textContent=file.name;
+   link.addEventListener('click',function(e){
+    e.preventDefault();
+    displayFile.call(this,file,url);
+   });
+
+   const removeBtn=document.createElement("span");
+   removeBtn.textContent="✖";
+   removeBtn.className="remove-btn";
+   removeBtn.addEventListener("click", e => {
+    e.stopPropagation();
+    e.preventDefault();
+    const index = playlistItems.indexOf(listItem);
+    if (index !== -1) playlistItems.splice(index, 1);
+    const u = listItem.dataset.url;
+    if (u) { try { URL.revokeObjectURL(u); } catch {} }
+    if (currentActive === listItem) {
+     currentActive = null;
+     resetPlayerUIToDefault();
+    }
+    listItem.remove();
+   });
+
+   listItem.appendChild(link);
+   listItem.appendChild(removeBtn);
+   playlist.appendChild(listItem);
+   playlistItems.push(listItem);
+  }
+ }
+});
+
+function playNext(){
+ if(!currentActive) return;
+ const index=playlistItems.indexOf(currentActive);
+ if(index>=0 && index<playlistItems.length-1)
+  playlistItems[index+1].querySelector('a').click();
+}
+
+videoPlayer.addEventListener('ended',()=>{ if(autoplayToggle.checked) playNext(); });
+audioPlayer.addEventListener('ended',()=>{ if(autoplayToggle.checked) playNext(); });
+
+/* === Local subtitle loader === */
+loadSubtitlesBtn.addEventListener('click',()=>subtitleFileInput.click());
+subtitleFileInput.addEventListener('change',e=>{
+ const file=e.target.files[0];
+ if(!file) return;
+ if(file.name.endsWith('.vtt')){
+  [...videoPlayer.querySelectorAll('track')].forEach(t=>t.remove());
+  const track=document.createElement('track');
+  track.kind='subtitles';
+  track.label=file.name;
+  track.srclang='en';
+  track.default=true;
+  track.src=URL.createObjectURL(file);
+  videoPlayer.appendChild(track);
+  videoPlayer.textTracks[0].mode='showing';
+ } else {
+  alert("Please select a .vtt subtitle file.");
+ }
+});
+</script>
+</body>
+</html>
