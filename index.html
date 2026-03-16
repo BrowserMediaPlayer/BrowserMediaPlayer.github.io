@@ -532,31 +532,42 @@ subtitleFileInput.addEventListener('change', e => {
 });
 /* === Server subtitle loader === */
 if (serverBtn) {
-  serverBtn.addEventListener('click', () => {
+  serverBtn.addEventListener('click', async () => {
     const url = prompt("Enter full URL to .vtt subtitle file:");
     if (!url) return;
 
-    // REGEX (no double escaping)
+    // Basic guard (accept .vtt with optional query)
     if (!/\.vtt(\?.*)?$/i.test(url)) {
       alert("URL must point to a .vtt file.");
       return;
     }
 
+    // Ensure the video element is CORS-ready (harmless if same-origin)
+    try { videoPlayer.setAttribute('crossorigin', 'anonymous'); } catch {}
+
+    // Remove any existing tracks
     [...videoPlayer.querySelectorAll('track')].forEach(t => t.remove());
 
+    // Create and add the new track
     const track = document.createElement('track');
     track.kind = 'subtitles';
     track.label = 'Server Subtitles';
     track.srclang = 'en';
     track.default = true;
+    track.setAttribute('crossorigin', 'anonymous');
     track.src = url;
-
     videoPlayer.appendChild(track);
 
-    try {
-      const tt = videoPlayer.textTracks[0];
-      if (tt) tt.mode = 'showing';
-    } catch {}
+    // IMPORTANT: wait for the track to parse before showing it
+    track.addEventListener('load', () => {
+      try {
+        const tt = videoPlayer.textTracks[0];
+        if (tt) tt.mode = 'showing';
+      } catch {}
+    });
+
+    // Some browsers only fire `load` after a `videoPlayer.load()`
+    try { videoPlayer.load(); } catch {}
   });
 }
 </script>
