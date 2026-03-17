@@ -251,7 +251,7 @@ return vtt;
 function timeToVtt(timeFileText) {
   const lineRe = new RegExp(
     String.raw`^(.*?)[\s,;:|-]*` +                 // leading text
-    String.raw`(\d{4}\/\d{2}\/\d{2})\s+` +         // yyyy/MM/dd
+    String.raw`(\d{4}[\/-]\d{2}[\/-]\d{2})\s+` +   // yyyy/MM/dd OR yyyy-MM-dd
     String.raw`(\d{2}:\d{2}:\d{2}\.\d{3})\s*$`     // HH:mm:ss.fff
   );
 
