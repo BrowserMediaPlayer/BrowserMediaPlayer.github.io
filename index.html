@@ -200,7 +200,7 @@ This player uses HTML5 features to load video and audio, and the browser’s bui
 <button id="load-subtitles-btn" class="fullscreen-btn" style="display:inline-block;">
   Load Local Subtitles
 </button>
-<input type="file" id="subtitle-file" accept=".vtt,.srt" style="display:none;">
+<input type="file" id="subtitle-file" accept=".vtt,.srt,.time" style="display:none;">
 <button id="server-subtitles-btn" class="fullscreen-btn" style="display:inline-block;">
   Load Server Subtitles
 </button>
@@ -241,6 +241,73 @@ let vtt = "WEBVTT\n\n";
 // Convert SRT timestamps (comma → dot)
 vtt += srtText.replace(/(\d+:\d+:\d+),(\d+)/g, "$1.$2");
 return vtt;
+}
+
+/* === TIME to VTT conversion helper === */
+// Behaviour:
+//  • Subtitle text = leading text before timestamp; else fallback to timestamp.
+//  • Cue timing = relative to first timestamp (00:00:00.000 at video start).
+//  • End of cue i = timestamp of line i+1; final cue gets +2s fallback.
+function timeToVtt(timeFileText) {
+  const lineRe = new RegExp(
+    String.raw`^(.*?)[\s,;:|-]*` +                 // leading text
+    String.raw`(\d{4}\/\d{2}\/\d{2})\s+` +         // yyyy/MM/dd
+    String.raw`(\d{2}:\d{2}:\d{2}\.\d{3})\s*$`     // HH:mm:ss.fff
+  );
+
+  const lines = timeFileText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const entries = [];
+
+  for (const raw of lines) {
+    const m = raw.match(lineRe);
+    if (!m) continue;
+
+    const leading = (m[1] || "").trim();
+    const dateStr = m[2];
+    const timeStr = m[3];
+    const timestampStr = `${dateStr} ${timeStr}`;
+
+    const cueText = leading ? `${leading} — ${timestampStr}` : timestampStr;
+
+    const iso = dateStr.replace(/\//g, "-") + "T" + timeStr + "Z";
+    const abs = new Date(iso);
+    if (isNaN(abs.getTime())) continue;
+
+    entries.push({ abs, text: cueText });
+  }
+
+  if (entries.length < 1) {
+    return "WEBVTT\n\nNOTE no valid .time lines found.\n";
+  }
+
+  const t0 = entries[0].abs.getTime();
+
+  function fmt(ms) {
+    const z = Math.max(0, ms);
+    const h = String(Math.floor(z / 3600000)).padStart(2, "0");
+    const m = String(Math.floor((z % 3600000) / 60000)).padStart(2, "0");
+    const s = String(Math.floor((z % 60000) / 1000)).padStart(2, "0");
+    const f = String(Math.floor(z % 1000)).padStart(3, "0");
+    return `${h}:${m}:${s}.${f}`;
+  }
+
+  let vtt = "WEBVTT\n\n";
+
+  for (let i = 0; i < entries.length; i++) {
+    const cur = entries[i];
+    const next = entries[i + 1];
+
+    const start = cur.abs.getTime() - t0;
+    const end = next ? (next.abs.getTime() - t0) : (start + 2000);
+
+    if (end <= start) continue;
+
+    vtt += `${i + 1}\n`;
+    vtt += `${fmt(start)} --> ${fmt(end)}\n`;
+    vtt += `${cur.text}\n\n`;
+  }
+
+  return vtt;
 }
 
 /* === Attach a subtitle track to the video === */
@@ -513,57 +580,62 @@ subtitleFileInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
 
-    // --- Validation: only .srt or .vtt allowed ---
-    const name = file.name.toLowerCase();
-    if (!name.endsWith(".vtt") && !name.endsWith(".srt")) {
-        alert("Invalid file type. Please select a .srt or .vtt subtitle file.");
-        e.target.value = ""; 
-        return;
-    }
+	// --- Validation: .vtt, .srt, or .time allowed ---
+	const name = file.name.toLowerCase();
+	if (!name.endsWith(".vtt") && !name.endsWith(".srt") && !name.endsWith(".time")) {
+		alert("Invalid file type. Please select a .vtt, .srt, or .time subtitle file.");
+		e.target.value = "";
+		return;
+	}
 
-    const reader = new FileReader();
-    reader.onload = () => {
-        let text = reader.result;
+	const reader = new FileReader();
+	reader.onload = () => {
+		let text = reader.result;
+		if (name.endsWith(".srt")) {
+			text = srtToVtt(text);
+		} else if (name.endsWith(".time")) {
+			text = timeToVtt(text);  
+		}
+		attachSubtitle(videoPlayer, text, file.name);
+	};
+	reader.readAsText(file);
+	
+});
 
-        // Convert SRT → VTT
-        if (name.endsWith(".srt")) {
-            text = srtToVtt(text);
+// === Server subtitle loader (VTT, SRT, or TIME) ===
+if (serverBtn) {
+    serverBtn.addEventListener('click', async () => {
+        const url = prompt("Enter full URL to .vtt, .srt or .time subtitle file:");
+        if (!url) return;
+
+        // Accept .vtt, .srt or .time
+        if (!/\.vtt(\?.*)?$|\.srt(\?.*)?$|\.time(\?.*)?$/i.test(url)) {
+            alert("URL must end with .vtt, .srt or .time");
+            return;
         }
 
-        attachSubtitle(videoPlayer, text, file.name);
-    };
+        try {
+            const response = await fetch(url);
+            let text = await response.text();
 
-    reader.readAsText(file);
-});
+            const lower = url.toLowerCase();
 
-/* === Server subtitle loader (VTT or SRT) === */
-if (serverBtn) {
-serverBtn.addEventListener('click', async () => {
-const url = prompt("Enter full URL to .vtt or .srt subtitle file:");
-if (!url) return;
+            // Convert SRT → VTT
+            if (lower.endsWith(".srt")) {
+                text = srtToVtt(text);
+            }
 
-// Accept .vtt or .srt
-if (!/\.vtt(\?.*)?$|\.srt(\?.*)?$/i.test(url)) {
-alert("URL must end with .vtt or .srt");
-return;
+            // Convert TIME → VTT
+            else if (lower.endsWith(".time")) {
+                text = timeToVtt(text);
+            }
+
+            attachSubtitle(videoPlayer, text, url.split('/').pop());
+        } catch (err) {
+            alert("Failed to load subtitle: " + err);
+        }
+    });
 }
-
-try {
-const response = await fetch(url);
-let text = await response.text();
-
-// Convert SRT to VTT if needed
-if (url.toLowerCase().endsWith(".srt")) {
-text = srtToVtt(text);
-}
-
-attachSubtitle(videoPlayer, text, url.split('/').pop());
-} catch (err) {
-alert("Failed to load subtitle: " + err);
-}
-});
-}
-
 </script>
 </body>
 </html>
