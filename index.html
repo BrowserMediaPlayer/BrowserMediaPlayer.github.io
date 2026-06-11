@@ -79,7 +79,7 @@ header {
   justify-content:space-between;
   align-items:center;
 }
-/* Custom Add Files button */
+/* Custom Browse Local Files button */
 #add-files-label {
   padding: 6px 10px;
   background: #333;
@@ -185,6 +185,63 @@ button.fullscreen-btn:hover { background-color: #555; }
 }
 #controls label { display: block; margin: 8px 0; }
 #controls input[type="number"] { width: 60px; margin-left: 5px; }
+
+#github-file-list li {
+  padding:8px;
+  border-bottom:1px solid #444;
+  cursor:pointer;
+}
+
+#github-file-list li:hover {
+  background:#444;
+}
+#github-btn {
+  padding: 6px 10px;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #fff;
+}
+
+#github-btn:hover {
+  background: #555;
+}
+.modal {
+  display:none;
+  position:fixed;
+  top:0;
+  left:0;
+  width:100%;
+  height:100%;
+  background:rgba(0,0,0,0.7);
+  z-index:1000;
+}
+
+.modal-content {
+  background:#222;
+  margin:10% auto;
+  padding:20px;
+  width:60%;
+  max-height:70vh;
+  overflow:auto;
+}
+
+.close-btn {
+  float:right;
+  cursor:pointer;
+}
+
+#github-file-list li {
+  padding:8px;
+  border-bottom:1px solid #444;
+  cursor:pointer;
+}
+
+#github-file-list li:hover {
+  background:#444;
+}
     </style>
 </head>
 <body>
@@ -217,11 +274,18 @@ This player uses HTML5 features to load video and audio, and the browser’s bui
 <h3 style="margin:5px 0 10px 0; font-size:18px; font-weight:bold;">Playlist</h3>
 <div id="file-input-container">
 <label id="add-files-label">
-  Add Files
+  Browse Local Files
   <input type="file" id="media-files"
     accept="video/*,audio/*,image/*,application/pdf,text/*,application/json,application/xml,text/csv,text/html,image/svg+xml,image/vnd.microsoft.icon"
     multiple>
 </label>
+
+<label id="github-btn">
+  Browse GitHub Repo
+
+</label>
+
+
 <button id="clear-playlist-btn">Clear Playlist</button>
 </div>
 <ul id="playlist"></ul>
@@ -234,6 +298,13 @@ This player uses HTML5 features to load video and audio, and the browser’s bui
 </div>
 </div>
 </div>
+<!-- Modal -->
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" id="close-modal">✖</span>
+    <h3>Samples (GitHub)</h3>
+    <ul id="github-file-list"></ul>
+  </div>
 <script>
 /* === SRT to VTT conversion helper === */
 function srtToVtt(srtText) {
@@ -636,6 +707,105 @@ if (serverBtn) {
         }
     });
 }
+// === GitHub modal controls ===
+const modal = document.getElementById("modal");
+const githubBtn = document.getElementById("github-btn");
+
+githubBtn.onclick = () => {
+  modal.style.display = "block";
+  loadGitHubFiles();
+};
+
+document.getElementById("close-modal").onclick = () => {
+  modal.style.display = "none";
+};
+
+window.onclick = (e) => {
+  if (e.target === modal) modal.style.display = "none";
+};
+async function loadGitHubFiles() {
+  const owner = "BrowserMediaPlayer";
+  const repo = "BrowserMediaPlayer.github.io";
+  const path = "Samples";
+
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const list = document.getElementById("github-file-list");
+
+  list.innerHTML = "Loading...";
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+
+    list.innerHTML = "";
+
+    data.forEach(file => {
+      if (file.type === "file") {
+
+        const li = document.createElement("li");
+        li.textContent = file.name;
+
+        li.onclick = () => {
+          const fakeFile = {
+            name: file.name,
+            type: detectType(file.name)
+          };
+
+          const url = file.download_url;
+
+          const listItem = document.createElement('li');
+          listItem.dataset.url = url;
+          listItem.dataset.type = fakeFile.type;
+          listItem.draggable = true;
+
+          const link = document.createElement('a');
+          link.textContent = fakeFile.name;
+
+          link.addEventListener('click', function (e) {
+            e.preventDefault();
+            displayFile.call(this, fakeFile, url);
+          });
+
+          const removeBtn = document.createElement("span");
+          removeBtn.textContent = "✖";
+          removeBtn.className = "remove-btn";
+
+          removeBtn.addEventListener("click", e => {
+            e.stopPropagation();
+            listItem.remove();
+          });
+
+          listItem.appendChild(link);
+          listItem.appendChild(removeBtn);
+
+          playlist.appendChild(listItem);
+          playlistItems.push(listItem);
+		  
+		  //Disabled// modal.style.display = "none"
+        };
+
+        list.appendChild(li);
+      }
+    });
+
+  } catch (err) {
+    list.innerHTML = "Error loading files";
+    console.error(err);
+  }
+}
+function detectType(name) {
+  name = name.toLowerCase();
+  if (name.endsWith(".mp4")) return "video/mp4";
+  if (name.endsWith(".mp3")) return "audio/mpeg";
+  if (name.endsWith(".wav")) return "audio/wav";
+  if (name.match(/\.(jpg|jpeg|png)/)) return "image/*";
+  if (name.endsWith(".pdf")) return "application/pdf";
+  if (name.endsWith(".html")) return "text/html";
+  if (name.endsWith(".csv")) return "text/csv";
+  if (name.endsWith(".txt")) return "text/plain";
+  return "application/octet-stream";
+}
 </script>
+</div>
 </body>
 </html>
