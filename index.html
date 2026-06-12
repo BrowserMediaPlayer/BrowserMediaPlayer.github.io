@@ -302,7 +302,7 @@ This player uses HTML5 features to load video and audio, and the browser’s bui
 <div id="modal" class="modal">
   <div class="modal-content">
     <span class="close-btn" id="close-modal">✖</span>
-    <h3>GitHub Repository</h3>
+    <h3>Operations (TEST)</h3>
     <ul id="github-file-list"></ul>
   </div>
 <script>
@@ -713,7 +713,7 @@ const githubBtn = document.getElementById("github-btn");
 
 githubBtn.onclick = () => {
   modal.style.display = "block";
-  loadGitHubFiles();
+  loadGitHubFolder("Operations");
 };
 
 document.getElementById("close-modal").onclick = () => {
@@ -723,10 +723,9 @@ document.getElementById("close-modal").onclick = () => {
 window.onclick = (e) => {
   if (e.target === modal) modal.style.display = "none";
 };
-async function loadGitHubFiles() {
+async function loadGitHubFolder(path = "Operations") {
   const owner = "BrowserMediaPlayer";
   const repo = "BrowserMediaPlayer.github.io";
-  const path = "Operations";
 
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const list = document.getElementById("github-file-list");
@@ -739,53 +738,86 @@ async function loadGitHubFiles() {
 
     list.innerHTML = "";
 
-    data.forEach(file => {
-      if (file.type === "file") {
+    // Add "Back" button if not root
+    if (path !== "Operations") {
+      const backLi = document.createElement("li");
+      backLi.textContent = "⬅ Back";
+      backLi.style.fontWeight = "bold";
 
-        const li = document.createElement("li");
-        li.textContent = file.name;
+      backLi.onclick = () => {
+        const parentPath = path.split("/").slice(0, -1).join("/");
+        loadGitHubFolder(parentPath || "Operations");
+      };
+
+      list.appendChild(backLi);
+    }
+
+    data.forEach(item => {
+      const li = document.createElement("li");
+
+      // Folder
+      if (item.type === "dir") {
+        li.textContent = "📁 " + item.name;
 
         li.onclick = () => {
-          const fakeFile = {
-            name: file.name,
-            type: detectType(file.name)
-          };
-
-          const url = file.download_url;
-
-          const listItem = document.createElement('li');
-          listItem.dataset.url = url;
-          listItem.dataset.type = fakeFile.type;
-          listItem.draggable = true;
-
-          const link = document.createElement('a');
-          link.textContent = fakeFile.name;
-
-          link.addEventListener('click', function (e) {
-            e.preventDefault();
-            displayFile.call(this, fakeFile, url);
-          });
-
-          const removeBtn = document.createElement("span");
-          removeBtn.textContent = "✖";
-          removeBtn.className = "remove-btn";
-
-          removeBtn.addEventListener("click", e => {
-            e.stopPropagation();
-            listItem.remove();
-          });
-
-          listItem.appendChild(link);
-          listItem.appendChild(removeBtn);
-
-          playlist.appendChild(listItem);
-          playlistItems.push(listItem);
-		  
-		  //Disabled// modal.style.display = "none"
+          loadGitHubFolder(item.path); // drill down
         };
-
-        list.appendChild(li);
       }
+
+      // File
+     if (item.type === "file") {
+  li.textContent = "📄 " + item.name;
+
+  li.onclick = () => {
+    const fakeFile = {
+      name: item.name,
+      type: detectType(item.name)
+    };
+
+    const url = item.download_url;
+
+    const listItem = document.createElement('li');
+    listItem.dataset.url = url;
+    listItem.dataset.type = fakeFile.type;
+    listItem.draggable = true;
+
+    const link = document.createElement('a');
+    link.textContent = fakeFile.name;
+
+    link.addEventListener('click', function (e) {
+      e.preventDefault();
+      displayFile.call(this, fakeFile, url);
+    });
+
+    // Same as local files
+    const removeBtn = document.createElement("span");
+    removeBtn.textContent = "✖";
+    removeBtn.className = "remove-btn";
+
+    removeBtn.addEventListener("click", e => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      const index = playlistItems.indexOf(listItem);
+      if (index !== -1) playlistItems.splice(index, 1);
+
+      if (currentActive === listItem) {
+        currentActive = null;
+        resetPlayerUIToDefault();
+      }
+
+      listItem.remove();
+    });
+
+    listItem.appendChild(link);
+    listItem.appendChild(removeBtn);
+
+    playlist.appendChild(listItem);
+    playlistItems.push(listItem);
+  };
+}
+
+      list.appendChild(li);
     });
 
   } catch (err) {
@@ -793,6 +825,7 @@ async function loadGitHubFiles() {
     console.error(err);
   }
 }
+
 function detectType(name) {
   name = name.toLowerCase();
   if (name.endsWith(".mp4")) return "video/mp4";
