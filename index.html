@@ -302,7 +302,7 @@ This player uses HTML5 features to load video and audio, and the browser’s bui
 <div id="modal" class="modal">
   <div class="modal-content">
     <span class="close-btn" id="close-modal">✖</span>
-    <h3>Samples (GitHub)</h3>
+    <h3>GitHub Repository</h3>
     <ul id="github-file-list"></ul>
   </div>
 <script>
@@ -726,7 +726,7 @@ window.onclick = (e) => {
 async function loadGitHubFiles() {
   const owner = "BrowserMediaPlayer";
   const repo = "BrowserMediaPlayer.github.io";
-  const path = "Samples";
+  const path = "Operations";
 
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const list = document.getElementById("github-file-list");
